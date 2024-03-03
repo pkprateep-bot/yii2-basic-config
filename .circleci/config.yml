@@ -48,6 +48,8 @@ jobs:
           command: |
             sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'dev' IDENTIFIED BY 'password'; GRANT ALL PRIVILEGES ON yii2basic_test.* TO 'dev'@'%'; FLUSH PRIVILEGES;"
 
+      - run: echo "<?php return ['host' => '127.0.0.1', 'username' => 'dev', 'password' => 'password']; ?>" > ./config/db.php
+
       # Run Codeception tests
       - run: ./vendor/bin/codecept run
 
