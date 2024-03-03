@@ -61,6 +61,19 @@ class SiteController extends Controller {
         return $this->render('index');
     }
 
+    public function actionSignupUser(){
+
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        $model = new SignupForm();
+
+        if ($model->load(Yii::$app->request->post()) && $model->validate()) {
+            return ['response' => 'Ok'];
+        }else{
+            return ['response' => 'Error'];
+        }
+        
+    }
+
     public function actionLogin() {
         if (!\Yii::$app->user->isGuest) {
             return $this->goHome();
