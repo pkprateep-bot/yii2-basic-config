@@ -1,0 +1,92 @@
+version: 2.1
+
+# Define the jobs we want to run for this project
+jobs:
+  test:
+    docker:
+      - image: cimg/php:8.2.12-browsers
+    steps:
+      - checkout
+      - run:
+          name: Install things we need
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y libzip-dev
+            sudo apt-get install -y zlib1g-dev libicu-dev g++
+            sudo apt-get install mysql-client
+            sudo apt-get -y install mysql-server
+            
+      - run:
+          name: Install PHP exts
+          command: |
+            sudo docker-php-ext-install zip
+            sudo docker-php-ext-configure intl
+            sudo docker-php-ext-install intl
+            sudo docker-php-ext-install pdo_mysql
+
+      - run:
+          name: Fix MySQL socket config
+          command: |
+            sudo sh -c "echo 'pdo_mysql.default_socket=/var/run/mysqld/mysqld.sock' > /usr/local/etc/php/conf.d/pdo.ini"
+
+      - run:
+          name: Start database server
+          command: |
+            sudo service mysql start
+            sleep 2
+            ps aux | grep mysql
+
+      # Install Composer dependencies
+      - run: php /usr/local/bin/composer install
+
+      # Create test database and import data
+      - run: sudo mysql -u root -e "CREATE DATABASE yii2basic_test;"
+      - run: sudo mysql -u root yii2basic_test < tests/_data/yii2basic.sql
+
+      - run:
+          name: Create non-admin user and grant privileges
+          command: |
+            sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'dev' IDENTIFIED BY 'password'; GRANT ALL PRIVILEGES ON yii2basic_test.* TO 'dev'@'%'; FLUSH PRIVILEGES;"
+
+      # Run Codeception tests
+      - run: ./vendor/bin/codecept run
+
+  deploy:
+    docker:
+      - image: cimg/php:8.2.12-browsers
+    steps:
+      - checkout
+
+      # Install sshpass
+      - run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      # # Zip the code
+      # - run:
+      #     name: Zip code
+      #     command: zip -r code.zip .
+
+      # # Copy code.zip to server
+      # - run:
+      #     name: Copy code to server
+      #     command: sshpass -p "${PASSWORDYII2}" scp -v -o StrictHostKeyChecking=no code.zip ${USERNAMEYII2}@${IPYII2}:/var/www/html/tests/
+
+      # Deploy via SSH
+      - run:
+          name: Deploy via SSH
+          command: sshpass -p "${PASSWORDYII2}" ssh -v -o StrictHostKeyChecking=no ${USERNAMEYII2}@${IPYII2} 'cd /var/www/html/dev0 && git pull && echo "Deployment successful!"'
+
+# Orchestrate our job run sequence
+workflows:
+  version: 2
+
+  # Run deploy job after successful test job on main branch
+  test_and_deploy:
+    jobs:
+      - test
+      - deploy:
+          requires:
+            - test
+          context: yii2
+          filters:
+            branches:
+              only: main
